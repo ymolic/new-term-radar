@@ -3,8 +3,8 @@
 `python -m radar pains "<keyword>"` reads, for a kind of tool:
 - low-star Chrome Web Store reviews (1 to `max_stars`) of the extensions Google shows for the
   keyword (GoAnyAPI: a site search, 2 credits; reviews, 3 credits a page), or of the ones you name;
-- Reddit posts that complain about the job or the tools for it (AIsa, $0.0019 a query);
-- comments under the top tutorial videos for it (AIsa, $0.001 a page of 20);
+- Reddit posts that complain about the job or the tools for it (Glasser or AIsa, about $0.0019 a query);
+- comments under the top tutorial videos for it (Glasser or AIsa, $0.001 a page of 20);
 and a small model groups them into the gaps they point at: what the tools fail to do, what is
 too hard, too slow or too dear, what people wish existed. Each gap has a count, quotes and the
 phrase someone with that problem would search.
@@ -23,7 +23,7 @@ import re
 import urllib.parse
 import urllib.request
 
-from . import UA, aisa, goanyapi, social
+from . import UA, aisa, backend, goanyapi, social
 
 EXTENSION = re.compile(r"(?:chromewebstore\.google\.com/detail|chrome\.google\.com/webstore/detail)/(?:[^/?#]+/)?([a-p]{32})")
 VIDEO = re.compile(r"youtube\.com/watch\?v=([\w-]{11})")
@@ -62,7 +62,7 @@ def group(model: str, items: list[dict]) -> list[dict]:
     if not items:
         return []
     user = json.dumps([{"i": i, "source": x["source"], "text": x["text"][:300]} for i, x in enumerate(items)], ensure_ascii=False)
-    return parse(aisa.chat(model, SYSTEM, user, max_tokens=2500), items)
+    return parse(backend.chat(model, SYSTEM, user, max_tokens=2500), items)
 
 
 def chrome(keyword: str, extensions: list[str], c: dict) -> tuple[list[dict], int, list[str]]:
@@ -168,7 +168,7 @@ def run(cfg: dict, keyword: str, extensions: list[str] | None = None) -> dict:
     except aisa.AisaError as exc:
         gaps, errors = [], errors + [f"model: {exc}"]
     by = {s: sum(1 for x in items if x["source"] == s) for s in ("chrome", "reddit", "youtube", "appstore")}
-    return {"keyword": keyword, "items": len(items), "by_source": by, "gaps": gaps, "errors": errors, "cost_micros": cost + aisa.take_chat_cost()}
+    return {"keyword": keyword, "items": len(items), "by_source": by, "gaps": gaps, "errors": errors, "cost_micros": cost + backend.take_chat_cost()}
 
 
 def tutorial_asks(cfg: dict, leads: list[dict]) -> dict:
@@ -184,4 +184,4 @@ def tutorial_asks(cfg: dict, leads: list[dict]) -> dict:
             gaps, errors = [], errors + [f"model: {exc}"]
         if gaps:
             out.append({"term": lead["term"], "comments": len(items), "gaps": gaps[:5]})
-    return {"leads": out, "errors": errors, "cost_micros": cost + aisa.take_chat_cost()}
+    return {"leads": out, "errors": errors, "cost_micros": cost + backend.take_chat_cost()}

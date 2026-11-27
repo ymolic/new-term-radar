@@ -3,7 +3,7 @@ paying product search for besides its name.
 
 For the strongest new names of the day (`names`, five by default):
 - new sites: for the first `whois_names` names, domains carrying the name registered in the last
-  `whois_days` days, from DataForSEO's whois overview through AIsa's REST passthrough (about $0.12
+  `whois_days` days, from DataForSEO's whois overview through Glasser or AIsa's REST passthrough (about $0.12
   a name: the query.domain method of watching who registers on a new word); for the rest, HTTPS
   certificates issued in the last week (crt.sh, free; it rate-limits hard, so one try, and a miss
   is a gap, not a zero). People register sites on a name before search engines list them;
@@ -25,7 +25,7 @@ import urllib.parse
 import urllib.request
 from datetime import date, timedelta
 
-from . import UA, aisa, goanyapi, usecases
+from . import UA, aisa, backend, goanyapi, usecases
 
 TIMEOUT = 20
 WHOIS = "domain_analytics/whois/overview/live"
@@ -57,7 +57,7 @@ def registered(name: str, today: date, days: int) -> tuple[int, list[str], int]:
     if len(token) < 5:
         return 0, [], 0
     since = (today - timedelta(days=days)).isoformat() + " 00:00:00 +00:00"
-    result, cost = aisa.rest(WHOIS, {"limit": 3, "order_by": ["created_datetime,desc"],
+    result, cost = backend.rest(WHOIS, {"limit": 3, "order_by": ["created_datetime,desc"],
                                      "filters": [["domain", "like", f"%{token}%"], "and", ["created_datetime", ">", since]]})
     return int(result.get("total_count") or 0), [i["domain"] for i in result.get("items") or []], cost
 

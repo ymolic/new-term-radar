@@ -1,7 +1,7 @@
 """Signal ⑦: what people ask for on Reddit ("is there an AI tool that…").
 
 A request is demand said out loud. Once a week (asks.weekday, Monday by default) this searches
-Reddit for the ways people ask for a tool (`patterns`, $0.0019 a query through AIsa), keeps the
+Reddit for the ways people ask for a tool (`patterns`, about $0.0019 a query through Glasser or AIsa), keeps the
 posts of the last week, and a small model sorts each: a request for something that does a job,
 a complaint about a tool, a solution someone shares, or other. For requests and complaints it
 writes the job as the words a person would search ("convert powerpoint slides to notes"). The
@@ -25,7 +25,7 @@ import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from . import UA, ai_answers, aisa, competition, snap, social, usecases
+from . import UA, ai_answers, aisa, backend, competition, snap, social, usecases
 from .i18n import t
 
 CHUNK = 20
@@ -66,7 +66,7 @@ def parse(answer: str, n: int) -> dict[int, dict]:
 def x_posts(c: dict) -> tuple[list[dict], int]:
     """Posts on X that ask for a tool (AIsa's advanced search, $0.003, media credits), last week, `x_min_likes` or more."""
     since = (date.today() - timedelta(days=7)).isoformat()
-    data, cost = aisa.call([{"call_id": "x", "tool": X_TOOL, "arguments": {
+    data, cost = backend.call([{"call_id": "x", "tool": X_TOOL, "arguments": {
         "query": f"{c['x_query']} lang:en min_faves:{c['x_min_likes']} -filter:replies since:{since}", "queryType": "Top"}}])
     return [{"id": f"x:{p['id']}", "title": p.get("text") or "", "text": "", "subreddit": "x", "score": int(p.get("likeCount") or 0),
              "url": p.get("url") or "", "created": x_time(p.get("createdAt") or "")} for p in (data.get("x") or {}).get("tweets") or []], cost
@@ -168,8 +168,11 @@ def classify(model: str, posts: list[dict]) -> tuple[list[dict], list[str]]:
         user = json.dumps([{"i": i, "title": p["title"], "text": p["text"][:300], "subreddit": p["subreddit"]}
                            for i, p in enumerate(chunk)], ensure_ascii=False)
         try:
-            for i, v in parse(aisa.chat(model, SYSTEM, user), len(chunk)).items():
+            for i, v in parse(backend.chat(model, SYSTEM, user), len(chunk)).items():
                 kept.append({**chunk[i], **v})
+        except backend.NoLLM as exc:            # said once, not once a chunk
+            errors.append(str(exc)[:160])
+            break
         except aisa.AisaError as exc:
             errors.append(str(exc)[:160])
     return kept, errors
@@ -208,4 +211,4 @@ def asks(cfg: dict, state: Path, today: date | None = None) -> dict:
     quiet = sorted((dict(j, volume=vol.get(k, {}).get("volume", 0)) for k, j in jobs.items()
                     if vol.get(k, {}).get("volume", 0) < c["min_volume"]), key=lambda j: (-len(j["posts"]), -j["score"]))[:c["max_leads"]]   # many askers over one viral thread
     return {"read": len(posts), "asks": len(kept), "unsized": len(jobs) - len(rows), "rows": rows, "quiet": quiet,
-            "terms": terms, "errors": errors + failed + comp_errors + ai_errors, "cost_micros": cost + aisa.take_chat_cost()}
+            "terms": terms, "errors": errors + failed + comp_errors + ai_errors, "cost_micros": cost + backend.take_chat_cost()}

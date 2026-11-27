@@ -1,4 +1,4 @@
-"""Optional second data source: GoAnyAPI (goanyapi.com), for what AIsa's tools do not give.
+"""Optional second data source: GoAnyAPI (goanyapi.com), for what Glasser's and AIsa's tools do not give.
 
 Used for two things: Google Trends' *related queries* for a name, the terms real people
 searched together with it, and a 30-day daily Trends series for one country, which
@@ -107,3 +107,25 @@ def chrome_reviews(extension_id: str, cursor: str = "") -> tuple[list[dict], str
     rows = [{"rating": c.get("rating"), "text": " ".join(str(c.get("content") or "").split()), "date": str(c.get("createdAt") or "")[:10]}
             for c in data.get("comments") or []]
     return rows, (data.get("nextCursor") or "") if data.get("hasMore") else "", cost
+
+
+def taaft_just_released(day: str = "") -> tuple[list[dict], int]:
+    """There's An AI For That's "just released" listing (5 credits a day, 6 for today's live one).
+
+    `day` is YYYYMMDD in Asia/Shanghai, within the last 30 days; omitted, today's listing is fetched live,
+    which the service says can take minutes. TAAFT answers bots with a Cloudflare challenge, so this is
+    the only way the radar reads that directory without a browser.
+    """
+    data, cost = call("taaft-just-released-api", **({"day": day} if day else {}))
+    out = []
+    for item in data.get("items") or []:
+        name = " ".join(str(item.get("name") or "").split())
+        if not name:
+            continue
+        out.append({"name": name[:120], "domain": str(item.get("domain") or ""),
+                    "category": " ".join(str(item.get("category") or "").split()),
+                    "pricing": str(item.get("pricingText") or ""),
+                    "about": " ".join(str(item.get("description") or "").split()),
+                    "url": str(item.get("sourceUrl") or item.get("websiteUrl") or ""),
+                    "released": str(item.get("releasedAt") or "")})
+    return out, cost

@@ -1,7 +1,7 @@
 """The radar's review: check every lead in DataForSEO Trends two weeks later.
 
 review()  takes up to `per_day` leads first seen `after_days` ago or earlier and not yet
-          checked, asks DataForSEO Trends (through AIsa) about each search variant, and
+          checked, asks DataForSEO Trends (through Glasser or AIsa) about each search variant, and
           stores hit / miss / no_data plus how many days the radar was ahead.
 
 Each variant is its own call: in one shared task the values share a 0-100 scale and a
@@ -21,7 +21,7 @@ import sqlite3
 import statistics
 from datetime import date, timedelta
 
-from . import aisa, store
+from . import backend, store
 
 BEFORE_DAYS = 30
 MAX_VARIANTS = 3      # each costs one Trends task ($0.0012 in October 2026)
@@ -161,11 +161,11 @@ def review(cfg: dict, conn: sqlite3.Connection, today: date | None = None) -> di
     if not due:
         return {"checked": [], "cost_micros": 0, "after_days": c["after_days"]}
     calls, plan = plan_calls(due, today, c["after_days"])
-    data, cost = aisa.call_all(calls)
+    data, cost = backend.call_all(calls)
     checked = []
     for ids, term, first_seen, keys in plan:
         if not all(cid in data for cid in ids):
-            if (today - first_seen).days > after_days + 14:
+            if (today - first_seen).days > c["after_days"] + 14:
                 store.save_verdict(conn, term, "no_data", None, {}, today)
             continue   # stays due until the retry window expires
         per = {k: rose(settled(_series((data[cid].get("tasks") or [{}])[0]), today), first_seen) for cid, k in zip(ids, keys)}
